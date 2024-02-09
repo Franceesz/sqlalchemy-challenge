@@ -34,14 +34,18 @@ app = Flask(__name__)
 #################################################
 # Flask Routes
 #################################################
+# Define a function which calculates and returns the the date one year from the most recent date
 def last_year():
     session =Session(engine)
-    """Return a list of precipitation (prcp)and date (date) data"""
+    # Define the most recent date in the Measurement dataset
+    # Then use the most recent date to calculate the date one year from the last date
     latest_date=session.query(Measurement.date).order_by(desc(Measurement.date)).first()
     year_ago= dt.datetime.strptime(latest_date[0], "%Y-%m-%d") - dt.timedelta(days=365)
-    
+    # Close the session  
     session.close()
+    # Return the date
     return(year_ago)
+# Define what to do when the user hits the homepage
 @app.route("/")
 def welcome():
     """List all available api routes."""
@@ -54,24 +58,27 @@ def welcome():
         f"/api/v1.0/start/end<br/>"
     )
 @app.route("/api/v1.0/precipitation")
+# Define what to do when the user hits the precipitation URL
 def precipitation():
     # Create our session (link) from Python to the DB
     session =Session(engine)
     """Return a list of precipitation (prcp)and date (date) data"""
     precipitation_query_results = session.query(Measurement.date, Measurement.prcp).filter(Measurement.date >= last_year()).order_by(asc(Measurement.date)).all()
     session.close()
-
+    # Create a dictionary from the row data and append to a list of prcp_list
     date_precipitation_list_dic = []
     for prcp, date in precipitation_query_results:
         date_precipitation_dic = {}
         date_precipitation_dic["precipitation"] = prcp
         date_precipitation_dic["date"] = date
         date_precipitation_list_dic.append(date_precipitation_dic)
+    # Return a list of jsonified precipitation data for the previous 12 months
     return jsonify(date_precipitation_list_dic)
-
+# Define what to do when the user hits the station URL
 @app.route("/api/v1.0/stations")
 def station():
     session=Session(engine)
+    # Query station data from the Station dataset
     all_station = session.query(Station.station).all()
     session.close()
     # Convert list of tuples into normal list
@@ -81,8 +88,10 @@ def station():
 @app.route("/api/v1.0/tobs") 
 def tobs():
     session= Session(engine)
+    # Query tobs data from last 12 months from the most recent date from Measurement table
     tobs_data = session.query(Measurement.date, Measurement.tobs).filter(Measurement.station == 'USC00519281').\
                         filter(Measurement.date >= last_year()).all()
+    # Create a dictionary from the row data and append to a list of tobs_list
     tobs_list = []
     for date, tobs in tobs_data:
         tobs_dict = {}
@@ -97,16 +106,19 @@ def tobs():
 @app.route("/api/v1.0/<start>/<end>")
 def temp_info(start=None,end=None):
     session = Session(engine)
+    # Check if there is an end date then do the task accordingly
     if end == None:
         start_data = session.query(func.min(Measurement.tobs), func.avg(Measurement.tobs), func.max(Measurement.tobs)).\
             filter(Measurement.date >= start).all()
         start_list = list(np.ravel(start_data))
         return jsonify(start_list)
     else:
+         # Query the data from start date to the end date
         start_toend_data= session.query(func.min(Measurement.tobs), func.avg(Measurement.tobs), func.max(Measurement.tobs)).\
             filter(Measurement.date >= start).filter(Measurement.date <= end).all()
         start_end_list=list(np.ravel(start_toend_data))
         return jsonify(start_end_list)
     session.close()
+# Define main branch 
 if __name__ == "__main__":
     app.run(debug = True)
