@@ -66,14 +66,9 @@ def precipitation():
     precipitation_query_results = session.query(Measurement.date, Measurement.prcp).filter(Measurement.date >= last_year()).order_by(asc(Measurement.date)).all()
     session.close()
     # Create a dictionary from the row data and append to a list of prcp_list
-    date_precipitation_list_dic = []
-    for prcp, date in precipitation_query_results:
-        date_precipitation_dic = {}
-        date_precipitation_dic["precipitation"] = prcp
-        date_precipitation_dic["date"] = date
-        date_precipitation_list_dic.append(date_precipitation_dic)
+    result_todict=dict(precipitation_query_results)
     # Return a list of jsonified precipitation data for the previous 12 months
-    return jsonify(date_precipitation_list_dic)
+    return jsonify(result_todict)
 # Define what to do when the user hits the station URL
 @app.route("/api/v1.0/stations")
 def station():
@@ -102,23 +97,39 @@ def tobs():
     # Return a list of jsonified tobs data for the previous 12 months
     return jsonify(tobs_list)
 
+def valid_date(datestr):
+    """Helper function to check if a date string is valid."""
+    try:
+        dt.datetime.strptime(datestr, "%Y-%m-%d")
+    except ValueError:
+        return False
+    else :
+        return True
 @app.route("/api/v1.0/<start>")
-@app.route("/api/v1.0/<start>/<end>")
-def temp_info(start=None,end=None):
+def temp_info(start):
     session = Session(engine)
     # Check if there is an end date then do the task accordingly
-    if end == None:
+    if valid_date(start) == False:
+        return jsonify({"error": "Invalid date format. Please use YYYY-MM-DD."})
+    else:
         start_data = session.query(func.min(Measurement.tobs), func.avg(Measurement.tobs), func.max(Measurement.tobs)).\
             filter(Measurement.date >= start).all()
         start_list = list(np.ravel(start_data))
         return jsonify(start_list)
+        session.close()
+       
+@app.route("/api/v1.0/<start>/<end>")
+def start_end(start, end):
+    session = Session(engine)
+    if valid_date(start)== False or valid_date(end)==False:
+        return jsonify({"error": "Invalid date format. Please use YYYY-MM-DD."})
     else:
-         # Query the data from start date to the end date
+     # Query the data from start date to the end date
         start_toend_data= session.query(func.min(Measurement.tobs), func.avg(Measurement.tobs), func.max(Measurement.tobs)).\
             filter(Measurement.date >= start).filter(Measurement.date <= end).all()
         start_end_list=list(np.ravel(start_toend_data))
         return jsonify(start_end_list)
-    session.close()
+        session.close()
 # Define main branch 
 if __name__ == "__main__":
     app.run(debug = True)
